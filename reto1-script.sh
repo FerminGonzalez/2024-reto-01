@@ -1,5 +1,4 @@
 #!/bin/bash
-set -euo pipefail
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -24,7 +23,7 @@ if [[ "${1:-}" == "--verify" || "${1:-}" == "-v" ]]; then
     VERIFY_MODE=true
 fi
 
-# === BLOQUE DE VERIFICACIÓN (modo solo lectura) ===
+# === BLOQUE DE VERIFICACIÓN (modo solo lectura, sin set -e) ===
 if [[ "$VERIFY_MODE" == true ]]; then
     log_info "=== Modo Verificación Reto 1 (Solo Lectura) ==="
     log_info "No se requieren permisos de root"
@@ -138,11 +137,6 @@ if [[ "$VERIFY_MODE" == true ]]; then
 fi
 
 # === BLOQUE PARA EJECUCIÓN CON ROOT ===
-if [[ $EUID -ne 0 ]]; then
-   log_error "Ejecutar como root (o usar --verify para modo solo lectura)"
-   exit 1
-fi
-
 log_info "=== Reto 1: Hardening y configuración Linux ==="
 log_info "Sistema operativo: $(lsb_release -d 2>/dev/null | cut -f2- || cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2- | tr -d '\"')"
 
