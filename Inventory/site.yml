@@ -1,0 +1,99 @@
+---
+# Playbook de configuración de servidores web - reto 01 hacakthonCopa 2024
+# Uso: ansible-playbook -i servers site.yml
+- name: Configuracion de servidores web HackathonLabs Networks
+  hosts: web
+  become: true
+  vars:
+    hackathon_group: hackatonLabs
+    hackathon_users:
+      - compras
+      - comercial
+      - ventas
+      - administrativo
+      - soporte
+    hackathon_password: "DefaultHackatonLabs123*"
+
+  tasks:
+    - name: 1. Garantizar el sistema operativo completamente actualizado
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+        update_cache: true
+
+    - name: 2. Instalar/actualizar samba y samba-client a la ultima version
+      ansible.builtin.dnf:
+        name:
+          - samba
+          - samba-client
+        state: latest
+
+    - name: 3. Activar SELinux en modo enforcing de forma permanente
+      ansible.posix.selinux:
+        state: enforcing
+        policy: targeted
+
+    - name: 4. Crear el grupo hackatonLabs
+      ansible.builtin.group:
+        name: "{{ hackathon_group }}"
+        state: present
+
+    - name: 4. Crear los 5 usuarios con password segura y politica de expiracion
+      ansible.builtin.user:
+        name: "{{ item }}"
+        group: "{{ hackathon_group }}"
+        password: "{{ hackathon_password | password_hash('sha512') }}"
+        update_password: on_create
+        password_expire_max: 90
+        password_expire_min: 10
+        password_expire_warn: 7
+      loop: "{{ hackathon_users }}"
+
+    - name: 5. Crear la carpeta /guias con permisos de grupo rwx
+      ansible.builtin.file:
+        path: /guias
+        state: directory
+        group: "{{ hackathon_group }}"
+        mode: "0770"
+
+    - name: 5. Poblar /guias con 100 archivos de texto vacios
+      ansible.builtin.copy:
+        content: ""
+        dest: "/guias/archivo-{{ item }}.txt"
+        group: "{{ hackathon_group }}"
+        mode: "0660"
+      loop: "{{ range(1, 101) | list }}"
+
+    - name: 6. Crear la subcarpeta /guias/config
+      ansible.builtin.file:
+        path: /guias/config
+        state: directory
+        group: "{{ hackathon_group }}"
+        mode: "0770"
+
+    - name: 6. Copiar archivos del sistema a /guias/config
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "/guias/config/{{ item | basename }}"
+        remote_src: true
+      loop:
+        - /etc/redhat-release
+        - /etc/passwd
+        - /usr/share/dict/linux.words
+
+    - name: 7. Almacenar la version exacta del SO en /tmp/os-version.txt
+      ansible.builtin.shell: "cat /etc/redhat-release > /tmp/os-version.txt"
+      changed_when: false
+
+    - name: 8. Crear enlace simbolico /guias/config/grupos -> /etc/group
+      ansible.builtin.file:
+        src: /etc/group
+        dest: /guias/config/grupos
+        state: link
+        force: true
+
+    - name: 9. Incluir el mensaje del dia (MOTD)
+      ansible.builtin.copy:
+        content: "El problema no es problema\n"
+        dest: /etc/motd
+        mode: "0644"
