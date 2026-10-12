@@ -24,7 +24,7 @@ if [[ "${1:-}" == "--verify" || "${1:-}" == "-v" ]]; then
     VERIFY_MODE=true
 fi
 
-# === BLOQUE DE VERIFICACIÓN (solo modo verify) ===
+# === BLOQUE DE VERIFICACIÓN (modo solo lectura) ===
 if [[ "$VERIFY_MODE" == true ]]; then
     log_info "=== Modo Verificación Reto 1 (Solo Lectura) ==="
     log_info "No se requieren permisos de root"
@@ -38,7 +38,7 @@ if [[ "$VERIFY_MODE" == true ]]; then
     T1_PENDING=$(apt-list --upgradeable 2>/dev/null | wc -l)
     if [[ "$T1_PENDING" -eq 0 ]]; then
         log_info "[T1] Sistema actualizado: COMPLETA"
-        ((VERIFIED++))
+        VERIFIED=$((VERIFIED + 1))
     else
         log_warn "[T1] Pendiente: $T1_PENDING paquetes"
     fi
@@ -46,7 +46,7 @@ if [[ "$VERIFY_MODE" == true ]]; then
     # T2: samba
     if dpkg -s samba >/dev/null 2>&1 && dpkg -s samba-client >/dev/null 2>&1; then
         log_info "[T2] samba/samba-client: COMPLETA"
-        ((VERIFIED++))
+        VERIFIED=$((VERIFIED + 1))
     else
         log_warn "[T2] PENDIENTE"
     fi
@@ -56,13 +56,13 @@ if [[ "$VERIFY_MODE" == true ]]; then
         CURRENT=$(getenforce 2>/dev/null || echo "desconocido")
         if [[ "$CURRENT" == "Enforcing" ]]; then
             log_info "[T3] SELinux Enforcing: COMPLETA"
-            ((VERIFIED++))
+            VERIFIED=$((VERIFIED + 1))
         else
             log_warn "[T3] PENDIENTE (actual: $CURRENT)"
         fi
     else
         log_info "[T3] SELinux: No disponible (Ubuntu usa AppArmor)"
-        ((VERIFIED++))
+        VERIFIED=$((VERIFIED + 1))
     fi
     
     # T4: Usuarios hackatonLabs
@@ -70,7 +70,7 @@ if [[ "$VERIFY_MODE" == true ]]; then
         USERS_FOUND=$(id -Gn hackatonLabs 2>/dev/null | wc -w)
         if [[ "$USERS_FOUND" -ge 5 ]]; then
             log_info "[T4] 5 usuarios con grupo hackatonLabs: COMPLETA"
-            ((VERIFIED++))
+            VERIFIED=$((VERIFIED + 1))
         else
             log_warn "[T4] PENDIENTE ($USERS_FOUND de 5 usuarios)"
         fi
@@ -81,7 +81,7 @@ if [[ "$VERIFY_MODE" == true ]]; then
     # T5: Carpeta /guias con 100 archivos
     if [[ -d /guias ]] && [[ "$(ls /guias/archivo-*.txt 2>/dev/null | wc -l)" -ge 100 ]]; then
         log_info "[T5] Carpeta /guias con 100 archivos: COMPLETA"
-        ((VERIFIED++))
+        VERIFIED=$((VERIFIED + 1))
     else
         log_warn "[T5] PENDIENTE (archivos encontrados: $(ls /guias/archivo-*.txt 2>/dev/null | wc -l))"
     fi
@@ -91,7 +91,7 @@ if [[ "$VERIFY_MODE" == true ]]; then
         CONFIG_COUNT=$(ls -A /guias/config/ 2>/dev/null | wc -l)
         if [[ "$CONFIG_COUNT" -ge 3 ]]; then
             log_info "[T6] /guias/config con $CONFIG_COUNT archivos: COMPLETA"
-            ((VERIFIED++))
+            VERIFIED=$((VERIFIED + 1))
         else
             log_warn "[T6] PENDIENTE ($CONFIG_COUNT archivos, mínimo 3)"
         fi
@@ -102,7 +102,7 @@ if [[ "$VERIFY_MODE" == true ]]; then
     # T7: /tmp/os-version.txt
     if [[ -f /tmp/os-version.txt ]]; then
         log_info "[T7] /tmp/os-version.txt: COMPLETA"
-        ((VERIFIED++))
+        VERIFIED=$((VERIFIED + 1))
     else
         log_warn "[T7] PENDIENTE"
     fi
@@ -110,7 +110,7 @@ if [[ "$VERIFY_MODE" == true ]]; then
     # T8: Enlace simbólico
     if [[ -L /guias/config/grupos ]]; then
         log_info "[T8] Enlace simbólico /guias/config/grupos -> /etc/group: COMPLETA"
-        ((VERIFIED++))
+        VERIFIED=$((VERIFIED + 1))
     else
         log_warn "[T8] PENDIENTE (enlace no existe)"
     fi
@@ -118,7 +118,7 @@ if [[ "$VERIFY_MODE" == true ]]; then
     # T9: /etc/motd
     if grep -qF "El problema no es problema" /etc/motd 2>/dev/null; then
         log_info "[T9] /etc/motd con mensaje 'El problema no es problema': COMPLETA"
-        ((VERIFIED++))
+        VERIFIED=$((VERIFIED + 1))
     else
         log_warn "[T9] PENDIENTE (falta mensaje en MOTD)"
     fi
@@ -189,10 +189,10 @@ for user in "${!users[@]}"; do
         useradd -m -g hackatonLabs -s /bin/bash "$user" 2>/dev/null || log_error "No se pudo crear $user"
     fi
     echo "$user:$password" | chpasswd 2>/dev/null || log_error "No se pudo setear password para $user"
-    chage -m 10 "$user" 2>/dev/null || log_warn "chage min failed"
-    chage -M 90 "$user" 2>/dev/null || log_warn "chage max failed"
-    chage -W 7 "$user" 2>/dev/null || log_warn "chage warn failed"
-    usermod -a -G hackatonLabs "$user" 2>/dev/null || log_warn "usermod group failed"
+    chage -m 10 "$user" 2>/dev/null && log_info "chage min 10 dias" || log_warn "chage min failed"
+    chage -M 90 "$user" 2>/dev/null && log_info "chage max 90 dias" || log_warn "chage max failed"
+    chage -W 7 "$user" 2>/dev/null && log_info "chage warn 7 dias" || log_warn "chage warn failed"
+    usermod -a -G hackatonLabs "$user" 2>/dev/null && log_info "usermod group ok" || log_warn "usermod group failed"
     log_info "Usuario $user configurado"
 done
 
