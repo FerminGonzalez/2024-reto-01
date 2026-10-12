@@ -146,3 +146,56 @@ Dado que no hay hardware Fortigate físico en este entorno, la configuración se
 - **Email**: ferming1541@gmail.com
 - **GitHub**: @FerminGonzalez
 - **Repositorio**: https://github.com/FerminGonzalez/2024-reto-01
+
+## Paso 8: Modo verificación (`--verify`) ✅
+- [x] Añadido al script `reto1-script.sh`
+- [x] Ejecutable sin permisos de root: `bash reto1-script.sh --verify`
+- [x] Reporte del estado de las 9 tareas:
+  - T1: Sistema actualizado (chequea `apt-list --upgradeable`)
+  - T2: samba/samba-client instalado (chequea dpkg)
+  - T3: SELinux modo Enforcing (o advertencia para Ubuntu/AppArmor)
+  - T4: Usuarios 5 con grupo hackatonLabs (chequea `getent group`)
+  - T5: Carpeta /guias con 100 archivos (`archivo-1.txt` a `archivo-100.txt`)
+  - T6: Carpeta /guias/config con archivos de configuración
+  - T7: Archivo `/tmp/os-version.txt` creado
+  - T8: Enlace simbólico `/guias/config/grupos` -> `/etc/group`
+  - T9: Mensaje `"El problema no es problema"` en `/etc/motd`
+- [x] Salida formatada con colores y resumen final: `$VERIFIED de $TOTAL tareas completadas`
+- [x] Modo seguro: funciona aunque no haya `set -euo pipefail` en el script
+
+---
+
+## Ejecución del modo verificación
+
+```bash
+# Desde el directorio del repositorio clonado:
+bash reto1-script.sh --verify
+
+# Ejemplo de salida:
+=== Modo Verificación Reto 1 (Solo Lectura) ===
+No se requieren permisos de root
+Chequeo del estado de las 9 tareas...
+
+[T1] Sistema actualizado: COMPLETA
+[T2] PENDIENTE
+[T3] SELinux: No disponible (Ubuntu usa AppArmor)
+[T4] Grupo hackatonLabs no existe
+[T5] PENDIENTE (archivos encontrados: 0)
+[T6] Carpeta /guias/config no existe
+[T7] PENDIENTE
+[T8] PENDIENTE (enlace no existe)
+[T9] PENDIENTE (falta mensaje en MOTD)
+
+========================================
+RESULTADO: 2 de 9 tareas completadas
+Faltan 7 tareas por completar.
+========================================
+```
+
+## Utilidad del modo verify
+
+El modo verificación es útil para:
+1. **Replicación en otros sistemas**: Verificar rápidamente qué pasos ya se han completado en un nuevo servidor
+2. **Diagnóstico**: Identificar rápidamente qué tareas aún faltan por hacer
+3. **Validación**: Confirmar que el script se ejecutó correctamente en un entorno anterior
+4. **Sin riesgos**: Al no requerir root, puede ejecutarse en cualquier momento sin riesgo de modificar el sistema
