@@ -199,3 +199,69 @@ El modo verificación es útil para:
 2. **Diagnóstico**: Identificar rápidamente qué tareas aún faltan por hacer
 3. **Validación**: Confirmar que el script se ejecutó correctamente en un entorno anterior
 4. **Sin riesgos**: Al no requerir root, puede ejecutarse en cualquier momento sin riesgo de modificar el sistema
+
+## Notas Específicas para WSL (Windows Subsystem for Linux)
+
+### Contexto Actual
+- **Entorno:** WSL2 con Ubuntu 26.04.1 LTS
+- **Usuario:** `ghost`
+- **Problema:** Permisos de superusuario limitados en WSL
+- **Solución temporal:** Las tareas que requieren `root` deben ejecutarse con configuración adecuada
+
+### Estado Actual del Reto 1 (después de verify)
+```
+Tareas completadas: 2 de 9
+  ✅ T1: Sistema actualizado (0 paquetes pendientes)
+  ✅ T3: SELinux no disponible (Ubuntu usa AppArmor - contexto WSL)
+Tareas pendientes: 7 de 9
+  ⚠️ T2: samba/samba-client - requiere instalación
+  ⚠️ T4: Grupo hackatonLabs - requiere groupadd
+  ⚠️ T5: Carpeta /guias con 100 archivos - requiere mkdir/touch
+  ⚠️ T6: Carpeta /guias/config - requiere copiar archivos
+  ⚠️ T7: /tmp/os-version.txt - requiere guardar versión
+  ⚠️ T8: Enlace simbólico - requiere ln -s
+  ⚠️ T9: /etc/motd - requiere mensaje MOTD
+```
+
+### Solución para WSL
+
+Para ejecutar las tareas pendientes en WSL, se recomienda una de estas opciones:
+
+#### **Opción A: Reinstalar WSL con permisos completos**
+```bash
+# En PowerShell como Administrador
+wsl --uninstall Ubuntu-26.04
+# Luego reinstalar desde la Microsoft Store
+```
+
+#### **Opción B: Configurar sudo en WSL actual**
+```bash
+# Crear archivo de configuración
+echo "your_username ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/your_username
+# Tu usuario debe estar en el grupo sudo: usermod -aG sudo your_username
+```
+
+#### **Opción C: Ejecutar comandos específicos manualmente**
+Las siguientes tareas se pueden intentar en WSL:
+
+```bash
+# T2: Instalar samba (puede fallar sin sudo, probar igual)
+apt-get update
+apt-get install -y samba samba-client
+
+# T5: Crear estructura /guias
+mkdir -p /guias/config
+touch /guias/archivo-{1..100}.txt
+
+# T7: Guardar versión OS
+cat /etc/os-release > /tmp/os-version.txt || echo "No se pudo obtener versión"
+
+# T9: Agregar mensaje MOTD (puede requerir permisos elevados)
+echo "El problema no es problema" >> /etc/motd 2>&1 || echo "Sin permisos para /etc/motd"
+```
+
+### Recomendaciones
+1. Verificar la versión de WSL: `wsl --list --verbose`
+2. Asegurarse de que la distribución de Ubuntu esté actualizada
+3. Considerar la instalación de paquetes adicionales: `apt-get install sudo`
+4. Reiniciar WSL después de cambios de configuración: `wsl --shutdown`
