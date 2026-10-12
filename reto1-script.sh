@@ -62,17 +62,26 @@ if [[ "$VERIFY_MODE" == true ]]; then
         log_warn "[T4] PENDIENTE: 'groupadd hackatonLabs' (necesita sudo en WSL)"
     fi
     
-    # T5: Carpeta guias con 100 archivos (usa HOME)
-    if [[ -d "${GUI_DIR}" ]] && [[ "$(ls "${GUI_DIR}/archivo-*.txt" 2>/dev/null | wc -l)" -ge 100 ]]; then
-        log_info "[T5] Carpeta ${GUI_DIR} con 100 archivos: COMPLETA (WSL friendly)"
+    # T5: Carpeta guias con 100 archivos (usa HOME) - USANDO ARRAY
+    # Método array (funciona correctamente)
+    shopt -s nullglob
+    GUI_FILES=( "${GUI_DIR}"/archivo-*.txt )
+    shopt -u nullglob
+    FILE_COUNT=${#GUI_FILES[@]}
+    if [[ "${GUI_DIR}" && "${FILE_COUNT}" -ge 100 ]]; then
+        log_info "[T5] Carpeta ${GUI_DIR} con ${FILE_COUNT} archivos: COMPLETA (WSL friendly)"
         VERIFIED=$((VERIFIED + 1))
     else
-        log_warn "[T5] PENDIENTE: Ejecuta 'mkdir -p ~/guias && touch ~/guias/archivo-{1..100}.txt'"
+        log_warn "[T5] PENDIENTE: Ejecuta 'mkdir -p ~/guias && touch ~/guias/archivo-{1..100}.txt' (actualmente: ${FILE_COUNT} archivos)"
     fi
     
-    # T6: Carpeta guias/config (usa HOME)
-    if [[ -d "${GUI_CONFIG_DIR}" ]] && [[ "$(ls -A "${GUI_CONFIG_DIR}/" 2>/dev/null | wc -l)" -ge 3 ]]; then
-        log_info "[T6] Carpeta ${GUI_CONFIG_DIR} con archivos: COMPLETA (WSL friendly)"
+    # T6: Carpeta guias/config (usa HOME) - USANDO ARRAY
+    shopt -s nullglob
+    GUI_CONFIG_FILES=( "${GUI_CONFIG_DIR}"/. )  # . para listing todo el contenido
+    shopt -u nullglob
+    CONFIG_COUNT=${#GUI_CONFIG_FILES[@]}
+    if [[ "${GUI_CONFIG_DIR}" && "${CONFIG_COUNT}" -ge 3 ]]; then
+        log_info "[T6] Carpeta ${GUI_CONFIG_DIR} con ${CONFIG_COUNT} archivos: COMPLETA (WSL friendly)"
         VERIFIED=$((VERIFIED + 1))
     else
         log_warn "[T6] PENDIENTE: Ejecuta 'mkdir -p ~/guias/config y copiar archivos'"
@@ -147,7 +156,7 @@ log_info "--- Tarea 4: Crear usuarios ---"
 groupadd hackatonLabs 2>/dev/null && log_info "Grupo hackatonLabs creado" || log_warn "No se pudo crear grupo (necesita sudo)"
 useradd -m -g hackatonLabs -s /bin/bash testuser 2>/dev/null && log_info "Usuario creado" || log_warn "No se pudo crear usuario (necesita sudo)"
 
-# T5: Carpeta guias - VERSION WSL (usar HOME)
+# T5: Carpeta guias - VERSION WSL (usar HOME y método array)
 log_info "--- Tarea 5: Carpeta guias (WSL friendly) ---"
 mkdir -p "${GUI_DIR}"
 chmod 770 "${GUI_DIR}"
@@ -155,8 +164,12 @@ log_info "Creando 100 archivos en ${GUI_DIR}..."
 for i in $(seq -w 1 100); do
     touch "${GUI_DIR}/archivo-${i}.txt"
 done
-FILE_COUNT=$(ls -1 "${GUI_DIR}/archivo-*.txt" 2>/dev/null | wc -l)
-log_info "Archivos creados: ${FILE_COUNT}"
+# Contar usando método array (mismo que verify)
+shopt -s nullglob
+GUI_FILES=( "${GUI_DIR}"/archivo-*.txt )
+shopt -u nullglob
+GUI_FILE_COUNT=${#GUI_FILES[@]}
+log_info "Archivos creados (método array): ${GUI_FILE_COUNT}"
 
 # T6: Carpeta guias/config - VERSION WSL
 log_info "--- Tarea 6: Carpeta guias/config (WSL friendly) ---"
