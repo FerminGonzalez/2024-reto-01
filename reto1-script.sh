@@ -18,28 +18,133 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# === NUEVA LÓGICA: Verificar modo --verify o -v ANTES que el check de root ===
+# === DETECTAR MODO VERIFY ===
 VERIFY_MODE=false
 if [[ "${1:-}" == "--verify" || "${1:-}" == "-v" ]]; then
     VERIFY_MODE=true
 fi
 
-# Si está en modo verificación, no requerir root y salir temprano
+# === BLOQUE DE VERIFICACIÓN (solo modo verify) ===
 if [[ "$VERIFY_MODE" == true ]]; then
-    log_info "=== Modo Verificación Reto 1 ==="
-    log_info "Modo solo lectura - sin requerir permisos de root"
-    log_info "Ejecutando chequeo de estado de las 9 tareas..."
+    log_info "=== Modo Verificación Reto 1 (Solo Lectura) ==="
+    log_info "No se requieren permisos de root"
+    log_info "Chequeo del estado de las 9 tareas..."
     echo ""
+    
+    VERIFIED=0
+    TOTAL=9
+    
+    # T1: SO actualizado
+    T1_PENDING=$(apt-list --upgradeable 2>/dev/null | wc -l)
+    if [[ "$T1_PENDING" -eq 0 ]]; then
+        log_info "[T1] Sistema actualizado: COMPLETA"
+        ((VERIFIED++))
+    else
+        log_warn "[T1] Pendiente: $T1_PENDING paquetes"
+    fi
+    
+    # T2: samba
+    if dpkg -s samba >/dev/null 2>&1 && dpkg -s samba-client >/dev/null 2>&1; then
+        log_info "[T2] samba/samba-client: COMPLETA"
+        ((VERIFIED++))
+    else
+        log_warn "[T2] PENDIENTE"
+    fi
+    
+    # T3: SELinux
+    if command -v getenforce &>/dev/null; then
+        CURRENT=$(getenforce 2>/dev/null || echo "desconocido")
+        if [[ "$CURRENT" == "Enforcing" ]]; then
+            log_info "[T3] SELinux Enforcing: COMPLETA"
+            ((VERIFIED++))
+        else
+            log_warn "[T3] PENDIENTE (actual: $CURRENT)"
+        fi
+    else
+        log_info "[T3] SELinux: No disponible (Ubuntu usa AppArmor)"
+        ((VERIFIED++))
+    fi
+    
+    # T4: Usuarios hackatonLabs
+    if getent group hackatonLabs >/dev/null 2>&1; then
+        USERS_FOUND=$(id -Gn hackatonLabs 2>/dev/null | wc -w)
+        if [[ "$USERS_FOUND" -ge 5 ]]; then
+            log_info "[T4] 5 usuarios con grupo hackatonLabs: COMPLETA"
+            ((VERIFIED++))
+        else
+            log_warn "[T4] PENDIENTE ($USERS_FOUND de 5 usuarios)"
+        fi
+    else
+        log_warn "[T4] Grupo hackatonLabs no existe"
+    fi
+    
+    # T5: Carpeta /guias con 100 archivos
+    if [[ -d /guias ]] && [[ "$(ls /guias/archivo-*.txt 2>/dev/null | wc -l)" -ge 100 ]]; then
+        log_info "[T5] Carpeta /guias con 100 archivos: COMPLETA"
+        ((VERIFIED++))
+    else
+        log_warn "[T5] PENDIENTE (archivos encontrados: $(ls /guias/archivo-*.txt 2>/dev/null | wc -l))"
+    fi
+    
+    # T6: Carpeta /guias/config
+    if [[ -d /guias/config ]]; then
+        CONFIG_COUNT=$(ls -A /guias/config/ 2>/dev/null | wc -l)
+        if [[ "$CONFIG_COUNT" -ge 3 ]]; then
+            log_info "[T6] /guias/config con $CONFIG_COUNT archivos: COMPLETA"
+            ((VERIFIED++))
+        else
+            log_warn "[T6] PENDIENTE ($CONFIG_COUNT archivos, mínimo 3)"
+        fi
+    else
+        log_warn "[T6] Carpeta /guias/config no existe"
+    fi
+    
+    # T7: /tmp/os-version.txt
+    if [[ -f /tmp/os-version.txt ]]; then
+        log_info "[T7] /tmp/os-version.txt: COMPLETA"
+        ((VERIFIED++))
+    else
+        log_warn "[T7] PENDIENTE"
+    fi
+    
+    # T8: Enlace simbólico
+    if [[ -L /guias/config/grupos ]]; then
+        log_info "[T8] Enlace simbólico /guias/config/grupos -> /etc/group: COMPLETA"
+        ((VERIFIED++))
+    else
+        log_warn "[T8] PENDIENTE (enlace no existe)"
+    fi
+    
+    # T9: /etc/motd
+    if grep -qF "El problema no es problema" /etc/motd 2>/dev/null; then
+        log_info "[T9] /etc/motd con mensaje 'El problema no es problema': COMPLETA"
+        ((VERIFIED++))
+    else
+        log_warn "[T9] PENDIENTE (falta mensaje en MOTD)"
+    fi
+    
+    echo ""
+    log_info "========================================"
+    log_info "RESULTADO: $VERIFIED de $TOTAL tareas completadas"
+    
+    if [[ "$VERIFIED" -eq "$TOTAL" ]]; then
+        log_info "¡Felicidades! Todas las tareas del Reto 1 están verificadas."
+    else
+        log_warn "Faltan $((TOTAL - VERIFIED)) tareas por completar."
+    fi
+    
+    log_info "========================================"
     exit 0
 fi
 
-# Verificar root solo si NO es modo verificación
+# === BLOQUE PARA EJECUCIÓN CON ROOT ===
 if [[ $EUID -ne 0 ]]; then
    log_error "Ejecutar como root (o usar --verify para modo solo lectura)"
    exit 1
 fi
 
 log_info "=== Reto 1: Hardening y configuración Linux ==="
+log_info "Sistema operativo: $(lsb_release -d 2>/dev/null | cut -f2- || cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2- | tr -d '\"')"
 
 # Tarea 1: Actualizar sistema
 log_info "--- Tarea 1: Actualizar SO ---"
@@ -91,29 +196,27 @@ for user in "${!users[@]}"; do
     log_info "Usuario $user configurado"
 done
 
-log_info "--- Tarea 5: Carpeta /guias ---"
+# Tarea 5: Carpeta /guias
+log_info "--- Tarea 5: Carpeta /guias con 100 archivos ---"
 mkdir -p /guias
 chown root:hackatonLabs /guias 2>/dev/null || true
 chmod 770 /guias 2>/dev/null || true
-log_info "Creando 100 archivos vacíos..."
 for i in $(seq -w 1 100); do
     touch "/guias/archivo-${i}.txt"
 done
 file_count=$(ls /guias/archivo-*.txt 2>/dev/null | wc -l)
 log_info "Archivos creados: $file_count"
 
+# Tarea 6: Carpeta /guias/config
 log_info "--- Tarea 6: Carpeta /guias/config ---"
 mkdir -p /guias/config
 chown root:hackatonLabs /guias/config 2>/dev/null || true
 chmod 770 /guias/config 2>/dev/null || true
-log_info "Copiando /etc/redhat-release..."
 cp /etc/redhat-release /guias/config/ 2>/dev/null || log_warn "No redhat-release"
 if [ -f /etc/os-release ]; then
     cp /etc/os-release /guias/config/redhat-release 2>/dev/null || true
 fi
-log_info "Copiando /etc/passwd..."
 cp /etc/passwd /guias/config/ 2>/dev/null || log_warn "No passwd"
-log_info "Copiando /usr/share/dict/linux.words..."
 if [ -f /usr/share/dict/linux.words ]; then
     cp /usr/share/dict/linux.words /guias/config/ 2>/dev/null || log_warn "No linux.words"
 else
@@ -122,6 +225,7 @@ fi
 config_total=$(ls -A /guias/config/ 2>/dev/null | wc -l)
 log_info "Archivos en /guias/config: $config_total"
 
+# Tarea 7: Guardar versión OS
 log_info "--- Tarea 7: Guardar versión OS ---"
 if [ -f /etc/os-release ]; then
     . /etc/os-release
@@ -135,6 +239,7 @@ echo "$VERSION_INFO" > /tmp/os-version.txt
 log_info "Version guardada:"
 cat /tmp/os-version.txt
 
+# Tarea 8: Enlace simbólico
 log_info "--- Tarea 8: Enlace simbólico ---"
 if [ -f /etc/group ]; then
     rm -f /guias/config/grupos 2>/dev/null || true
@@ -148,6 +253,7 @@ else
     log_error "/etc/group no existe"
 fi
 
+# Tarea 9: Mensaje /etc/motd
 log_info "--- Tarea 9: Mensaje /etc/motd ---"
 MOTD_MSG="El problema no es problema"
 motd_file="/etc/motd"
@@ -156,110 +262,6 @@ if ! grep -qF "$MOTD_MSG" "$motd_file" 2>/dev/null; then
     log_info "Mensaje agregado a /etc/motd"
 else
     log_info "Mensaje ya presente en /etc/motd"
-fi
-
-# === MODO VERIFICACIÓN AL FINAL DEL SCRIPT ===
-if [[ "$VERIFY_MODE" == true ]]; then
-    log_info "=== Resumen Verificación Reto 1 ==="
-    VERIFIED=0
-    TOTAL=9
-    
-    # T1: SO actualizado
-    T1_PENDING=$(apt-list --upgradeable 2>/dev/null | wc -l)
-    if [[ "$T1_PENDING" -eq 0 ]]; then
-        log_info "[T1] Sistema actualizado: COMPLETA"
-        ((VERIFIED++))
-    else
-        log_warn "[T1] Pendiente: $T1_PENDING paquetes"
-    fi
-    
-    # T2: samba
-    if dpkg -s samba >/dev/null 2>&1 && dpkg -s samba-client >/dev/null 2>&1; then
-        log_info "[T2] samba: COMPLETA"
-        ((VERIFIED++))
-    else
-        log_warn "[T2] PENDIENTE"
-    fi
-    
-    # T3: SELinux
-    if command -v getenforce &>/dev/null; then
-        CURRENT=$(getenforce 2>/dev/null || echo "desconocido")
-        if [[ "$CURRENT" == "Enforcing" ]]; then
-            log_info "[T3] SELinux Enforcing: COMPLETA"
-            ((VERIFIED++))
-        else
-            log_warn "[T3] PENDIENTE (actual: $CURRENT)"
-        fi
-    else
-        log_info "[T3] SELinux: No disponible (Ubuntu)"
-        ((VERIFIED++))
-    fi
-    
-    # T4: Usuarios
-    if getent group hackatonLabs >/dev/null 2>&1; then
-        USERS_FOUND=$(id -Gn hackatonLabs 2>/dev/null | wc -w)
-        if [[ "$USERS_FOUND" -ge 5 ]]; then
-            log_info "[T4] Usuarios 5 con grupo: COMPLETA"
-            ((VERIFIED++))
-        else
-            log_warn "[T4] PENDIENTE ($USERS_FOUND de 5)"
-        fi
-    else
-        log_warn "[T4] Grupo no existe"
-    fi
-    
-    # T5: /guias 100 archivos
-    if [[ -d /guias ]] && [[ "$(ls /guias/archivo-*.txt 2>/dev/null | wc -l)" -ge 100 ]]; then
-        log_info "[T5] /guias 100 archivos: COMPLETA"
-        ((VERIFIED++))
-    else
-        log_warn "[T5] PENDIENTE"
-    fi
-    
-    # T6: /guias/config
-    if [[ -d /guias/config ]]; then
-        CONFIG_COUNT=$(ls -A /guias/config/ 2>/dev/null | wc -l)
-        if [[ "$CONFIG_COUNT" -ge 3 ]]; then
-            log_info "[T6] /guias/config: COMPLETA"
-            ((VERIFIED++))
-        else
-            log_warn "[T6] PENDIENTE ($CONFIG_COUNT archivos)"
-        fi
-    else
-        log_warn "[T6] NO EXISTE"
-    fi
-    
-    # T7: /tmp/os-version.txt
-    if [[ -f /tmp/os-version.txt ]]; then
-        log_info "[T7] /tmp/os-version.txt: COMPLETA"
-        ((VERIFIED++))
-    else
-        log_warn "[T7] PENDIENTE"
-    fi
-    
-    # T8: Enlace simbólico
-    if [[ -L /guias/config/grupos ]]; then
-        log_info "[T8] Enlace simbólico: COMPLETA"
-        ((VERIFIED++))
-    else
-        log_warn "[T8] PENDIENTE"
-    fi
-    
-    # T9: /etc/motd
-    if grep -qF "El problema no es problema" /etc/motd 2>/dev/null; then
-        log_info "[T9] /etc/motd mensaje: COMPLETA"
-        ((VERIFIED++))
-    else
-        log_warn "[T9] PENDIENTE"
-    fi
-    
-    echo ""
-    log_info "Tareas completadas: $VERIFIED de $TOTAL"
-    if [[ "$VERIFIED" -eq "$TOTAL" ]]; then
-        log_info "¡Todas las tareas del Reto 1 están completadas!"
-    else
-        log_warn "Faltan $((TOTAL - VERIFIED)) tareas por completar"
-    fi
 fi
 
 log_info "=== Script Reto 1 finalizado ==="
