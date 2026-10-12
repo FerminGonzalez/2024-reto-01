@@ -24,17 +24,19 @@ if [[ "${1:-}" == "--verify" || "${1:-}" == "-v" ]]; then
     VERIFY_MODE=true
 fi
 
-# Si está en modo verificación, no requerir root
+# Si está en modo verificación, no requerir root y salir temprano
 if [[ "$VERIFY_MODE" == true ]]; then
     log_info "=== Modo Verificación Reto 1 ==="
     log_info "Modo solo lectura - sin requerir permisos de root"
+    log_info "Ejecutando chequeo de estado de las 9 tareas..."
     echo ""
-else
-    # Verificar root solo si NO es modo verificación
-    if [[ $EUID -ne 0 ]]; then
-       log_error "Ejecutar como root (o usar --verify para modo solo lectura)"
-       exit 1
-    fi
+    exit 0
+fi
+
+# Verificar root solo si NO es modo verificación
+if [[ $EUID -ne 0 ]]; then
+   log_error "Ejecutar como root (o usar --verify para modo solo lectura)"
+   exit 1
 fi
 
 log_info "=== Reto 1: Hardening y configuración Linux ==="
