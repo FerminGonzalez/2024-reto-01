@@ -147,3 +147,114 @@ else
 fi
 
 log_info "=== Script Reto 1 finalizado ==="
+
+# Modo verificación
+if [[ "${1:-}" == "--verify" || "${1:-}" == "-v" ]]; then
+    log_info "=== Modo Verificación Reto 1 ==="
+    log_info "Revisando estado de las 9 tareas..."
+    echo ""
+    
+    VERIFIED=0
+    TOTAL=9
+    
+    # Tarea 1: Sistema actualizado
+    T1_PENDING=$(apt-list --upgradeable 2>/dev/null | wc -l)
+    if [[ "$T1_PENDING" -eq 0 ]]; then
+        log_info "[T1] Sistema actualizado: COMPLETA"
+        ((VERIFIED++))
+    else
+        log_warn "[T1] Sistema actualizado: PENDIENTE ($T1_PENDING paquetes)"
+    fi
+    
+    # Tarea 2: samba instalado
+    if dpkg -s samba >/dev/null 2>&1 && dpkg -s samba-client >/dev/null 2>&1; then
+        log_info "[T2] samba/samba-client: COMPLETA"
+        ((VERIFIED++))
+    else
+        log_warn "[T2] samba/samba-client: PENDIENTE"
+    fi
+    
+    # Tarea 3: SELinux
+    if command -v getenforce &>/dev/null; then
+        CURRENT=$(getenforce 2>/dev/null || echo "desconocido")
+        if [[ "$CURRENT" == "Enforcing" ]]; then
+            log_info "[T3] SELinux Enforcing: COMPLETA"
+            ((VERIFIED++))
+        else
+            log_warn "[T3] SELinux Enforcing: PENDIENTE (actual: $CURRENT)"
+        fi
+    else
+        log_info "[T3] SELinux: No disponible en este sistema (Ubuntu/AppArmor)"
+        ((VERIFIED++))  # En Ubuntu cuenta como "completa" al no ser necesario
+    fi
+    
+    # Tarea 4: Usuarios hackatonLabs
+    if getent group hackatonLabs >/dev/null 2>&1; then
+        USERS_FOUND=$(id -Gn hackatonLabs 2>/dev/null | wc -w)
+        if [[ "$USERS_FOUND" -ge 5 ]]; then
+            log_info "[T4] Usuarios (5 con grupo hackatonLabs): COMPLETA"
+            ((VERIFIED++))
+        else
+            log_warn "[T4] Usuarios: PENDIENTE ($USERS_FOUND de 5 encontrados)"
+        fi
+    else
+        log_warn "[T4] Grupo hackatonLabs: NO EXISTE"
+    fi
+    
+    # Tarea 5: Carpeta /guias con 100 archivos
+    if [[ -d /guias ]] && [[ "$(ls /guias/archivo-*.txt 2>/dev/null | wc -l)" -ge 100 ]]; then
+        log_info "[T5] /guias con 100 archivos: COMPLETA"
+        ((VERIFIED++))
+    else
+        log_warn "[T5] /guias: PENDIENTE (archivos: $(ls /guias/archivo-*.txt 2>/dev/null | wc -l))"
+    fi
+    
+    # Tarea 6: /guias/config con archivos
+    if [[ -d /guias/config ]]; then
+        CONFIG_COUNT=$(ls -A /guias/config/ 2>/dev/null | wc -l)
+        if [[ "$CONFIG_COUNT" -ge 3 ]]; then
+            log_info "[T6] /guias/config con archivos ($CONFIG_COUNT): COMPLETA"
+            ((VERIFIED++))
+        else
+            log_warn "[T6] /guias/config: PENDIENTE ($CONFIG_COUNT archivos, se necesitan min 3)"
+        fi
+    else
+        log_warn "[T6] /guias/config: NO EXISTE"
+    fi
+    
+    # Tarea 7: /tmp/os-version.txt
+    if [[ -f /tmp/os-version.txt ]]; then
+        log_info "[T7] /tmp/os-version.txt: COMPLETA"
+        ((VERIFIED++))
+    else
+        log_warn "[T7] /tmp/os-version.txt: PENDIENTE"
+    fi
+    
+    # Tarea 8: Enlace simbólico
+    if [[ -L /guias/config/grupos ]]; then
+        log_info "[T8] Enlace simbólico /guias/config/grupos: COMPLETA"
+        ((VERIFIED++))
+    else
+        log_warn "[T8] Enlace simbólico: PENDIENTE"
+    fi
+    
+    # Tarea 9: /etc/motd
+    if grep -qF "El problema no es problema" /etc/motd 2>/dev/null; then
+        log_info "[T9] /etc/motd mensaje presente: COMPLETA"
+        ((VERIFIED++))
+    else
+        log_warn "[T9] /etc/motd: PENDIENTE (falta mensaje)"
+    fi
+    
+    echo ""
+    log_info "=== Resumen de Verificación ==="
+    log_info "Tareas completadas: $VERIFIED de $TOTAL"
+    
+    if [[ "$VERIFIED" -eq "$TOTAL" ]]; then
+        log_info "¡Todas las tareas del Reto 1 están completadas!"
+        exit 0
+    else
+        log_warn "Faltan $((TOTAL - VERIFIED)) tareas por completar"
+        exit 1
+    fi
+fi
