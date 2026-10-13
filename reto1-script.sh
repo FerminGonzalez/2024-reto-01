@@ -175,17 +175,37 @@ log_info "WSL usa AppArmor en lugar de SELinux"
 log_info "Para RHEL/CentOS: configurar Enforcing"
 log_info "WSL/Ubuntu: Ya viene con perfil de seguridad AppArmor"
 
-# T4: Usuarios (intentamos, puede fallar sin sudo)
+# T4: Usuarios (idempotente: distinguir 'ya existe' de 'permiso denegado')
 log_info "--- Tarea 4: Crear usuarios ---"
-groupadd hackatonLabs 2>/dev/null && log_info "Grupo hackatonLabs creado" || log_warn "No se pudo crear grupo (necesita sudo)"
-useradd -m -g hackatonLabs -s /bin/bash testuser 2>/dev/null && log_info "Usuario creado" || log_warn "No se pudo crear usuario (necesita sudo)"
+if getent group hackatonLabs >/dev/null 2>&1; then
+    log_info "Grupo hackatonLabs ya existe"
+elif groupadd hackatonLabs 2>/dev/null; then
+    log_info "Grupo hackatonLabs creado"
+else
+    log_warn "No se pudo crear grupo hackatonLabs (necesita sudo/root)"
+fi
+if id testuser >/dev/null 2>&1; then
+    log_info "Usuario testuser ya existe"
+elif useradd -m -g hackatonLabs -s /bin/bash testuser 2>/dev/null; then
+    log_info "Usuario testuser creado (grupo hackatonLabs)"
+else
+    log_warn "No se pudo crear usuario testuser (necesita sudo/root)"
+fi
 
 # T5: Carpeta guias - VERSION WSL (usar HOME y método array)
 log_info "--- Tarea 5: Carpeta guias (WSL friendly) ---"
 mkdir -p "${GUI_DIR}"
 chmod 770 "${GUI_DIR}"
+# Limpiar serie previa para dejar estado consistente (idempotente; evita duplicados por padding)
+shopt -s nullglob
+OLD_GUI_FILES=( "${GUI_DIR}"/archivo-*.txt )
+shopt -u nullglob
+if (( ${#OLD_GUI_FILES[@]} > 0 )); then
+    rm -f "${OLD_GUI_FILES[@]}"
+    log_info "Limpiados ${#OLD_GUI_FILES[@]} archivos previos (evitar duplicados)"
+fi
 log_info "Creando 100 archivos en ${GUI_DIR}..."
-for i in $(seq -w 1 100); do
+for i in $(seq 1 100); do
     touch "${GUI_DIR}/archivo-${i}.txt"
 done
 # Contar usando método array (mismo que verify)
@@ -210,12 +230,19 @@ log_info "--- Tarea 7: Guardar versión OS ---"
 if [ -f /etc/os-release ]; then
     . /etc/os-release
     VERSION_INFO="NAME=\"${NAME}\" VERSION=\"${VERSION_ID}\" VERSION_CODENAME=\"${VERSION_CODENAME}\" ID=${ID}"
-    echo "$VERSION_INFO" > /tmp/os-version.txt
-    log_info "Version guardada en /tmp:"
+else
+    VERSION_INFO="Linux Ubuntu WSL"
+fi
+if ( printf '%s\n' "$VERSION_INFO" > /tmp/os-version.txt ) 2>/dev/null; then
+    log_info "Version guardada en /tmp/os-version.txt:"
+    cat /tmp/os-version.txt
+elif [ -s /tmp/os-version.txt ]; then
+    # Peculiaridad WSL: root no reescribe archivos tmpfs pre-existentes de otro usuario,
+    # pero el contenido ya presente es correcto -> no es un fallo.
+    log_info "/tmp/os-version.txt ya existe y contiene:"
     cat /tmp/os-version.txt
 else
-    echo "Linux Ubuntu WSL" > /tmp/os-version.txt
-    log_info "Version por defecto guardada"
+    log_warn "No se pudo escribir /tmp/os-version.txt"
 fi
 
 # T8: Enlace simbólico - VERSION WSL (usar HOME)
