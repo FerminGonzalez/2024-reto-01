@@ -43,11 +43,20 @@ if [[ "$VERIFY_MODE" == true ]]; then
     VERIFIED=$((VERIFIED + 1))
     
     # T2: samba - chequear si está instalado
-    if dpkg -s samba >/dev/null 2>&1 && dpkg -s samba-client >/dev/null 2>&1; then
-        log_info "[T2] samba/samba-client: COMPLETA"
+    # Nota: el cliente se llama 'smbclient' en Debian/Ubuntu y 'samba-client' en RHEL/CentOS
+    if command -v dpkg >/dev/null 2>&1; then
+        SAMBA_OK=false
+        dpkg -s samba >/dev/null 2>&1 && { dpkg -s smbclient >/dev/null 2>&1 || dpkg -s samba-client >/dev/null 2>&1; } && SAMBA_OK=true
+    else
+        # RHEL/CentOS/Fedora (rpm)
+        SAMBA_OK=false
+        rpm -q samba >/dev/null 2>&1 && rpm -q samba-client >/dev/null 2>&1 && SAMBA_OK=true
+    fi
+    if [[ "${SAMBA_OK}" == "true" ]]; then
+        log_info "[T2] samba + cliente (smbclient/samba-client): COMPLETA"
         VERIFIED=$((VERIFIED + 1))
     else
-        log_warn "[T2] PENDIENTE: 'apt-get install -y samba samba-client' (necesita sudo en WSL)"
+        log_warn "[T2] PENDIENTE: 'apt-get install -y samba smbclient' / 'yum install -y samba samba-client' (necesita sudo)"
     fi
     
     # T3: SELinux - contexto WSL
@@ -77,7 +86,7 @@ if [[ "$VERIFY_MODE" == true ]]; then
     
     # T6: Carpeta guias/config (usa HOME) - USANDO ARRAY
     shopt -s nullglob
-    GUI_CONFIG_FILES=( "${GUI_CONFIG_DIR}"/. )  # . para listing todo el contenido
+    GUI_CONFIG_FILES=( "${GUI_CONFIG_DIR}"/* )  # glob real: expande a los archivos del directorio
     shopt -u nullglob
     CONFIG_COUNT=${#GUI_CONFIG_FILES[@]}
     if [[ "${GUI_CONFIG_DIR}" && "${CONFIG_COUNT}" -ge 3 ]]; then
@@ -142,8 +151,23 @@ apt-get update -y 2>/dev/null | grep -v "^(Hit|Get|Fetched|OK|Reading)" | head -
 apt-get upgrade -y 2>/dev/null | tail -3 || true
 
 # T2: samba (puede fallar sin sudo - está bien en WSL)
+# El cliente se llama 'smbclient' en Debian/Ubuntu y 'samba-client' en RHEL/CentOS
 log_info "--- Tarea 2: Instalar samba ---"
-apt-get install -y samba 2>/dev/null && log_info "samba instalado" || log_warn "samba no instalado (sin permisos root en WSL)"
+if command -v apt-get >/dev/null 2>&1; then
+    if apt-get install -y samba smbclient 2>/dev/null; then
+        log_info "samba + smbclient instalados"
+    else
+        log_warn "samba no instalado (sin permisos root en WSL)"
+    fi
+elif command -v yum >/dev/null 2>&1; then
+    if yum install -y samba samba-client 2>/dev/null; then
+        log_info "samba + samba-client instalados"
+    else
+        log_warn "samba no instalado (sin permisos root)"
+    fi
+else
+    log_warn "Gestor de paquetes no reconocido (ni apt-get ni yum)"
+fi
 
 # T3: SELinux (contexto WSL)
 log_info "--- Tarea 3: SELinux ---"
